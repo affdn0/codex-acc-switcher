@@ -6,10 +6,12 @@ struct CodexAccountSwitcherApp: App {
     @StateObject private var state = AppState()
 
     var body: some Scene {
-        MenuBarExtra("Codex Account Switcher", image: "MenuBarTemplate") {
+        MenuBarExtra {
             MenuContentView()
                 .environmentObject(state)
                 .onAppear { state.refreshStaleOnOpen() }
+        } label: {
+            BrandMark()
         }
         .menuBarExtraStyle(.window)
     }
@@ -112,13 +114,32 @@ struct AccountCard: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Refresh quota for \(snapshot.label)")
-                Button(role: .destructive) {
+                Button {
                     isConfirmingRemoval = true
                 } label: {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
                 .help("Remove \(snapshot.label)")
+            }
+
+            if isConfirmingRemoval {
+                HStack(spacing: 8) {
+                    Label("Remove \(snapshot.label)?", systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Remove", role: .destructive) {
+                        state.removeSnapshot(snapshot)
+                        isConfirmingRemoval = false
+                    }
+                    .controlSize(.small)
+                    Button("Cancel") {
+                        isConfirmingRemoval = false
+                    }
+                    .controlSize(.small)
+                }
             }
 
             QuotaBar(label: "5h", window: quota?.session, tint: tint)
@@ -156,12 +177,6 @@ struct AccountCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(.separator.opacity(0.7), lineWidth: 1)
-        }
-        .confirmationDialog("Remove \(snapshot.label)?", isPresented: $isConfirmingRemoval) {
-            Button("Remove Account", role: .destructive) {
-                state.removeSnapshot(snapshot)
-            }
-            Button("Cancel", role: .cancel) {}
         }
     }
 
