@@ -7,11 +7,11 @@ struct BrandMark: View {
             Image(nsImage: icon.templateImage)
                 .resizable()
                 .interpolation(.medium)
-                .frame(width: 16, height: 16)
+                .frame(width: 14, height: 14)
                 .accessibilityLabel("Codex Account Switcher")
         } else {
             Image(systemName: "arrow.triangle.2.circlepath")
-                .frame(width: 16, height: 16)
+                .frame(width: 14, height: 14)
                 .accessibilityLabel("Codex Account Switcher")
         }
     }
