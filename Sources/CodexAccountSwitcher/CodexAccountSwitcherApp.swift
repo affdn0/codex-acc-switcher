@@ -86,6 +86,7 @@ struct MenuContentView: View {
 
 struct AccountCard: View {
     @EnvironmentObject private var state: AppState
+    @State private var isConfirmingRemoval = false
     let snapshot: AccountSnapshot
     let quota: QuotaSnapshot?
 
@@ -111,6 +112,13 @@ struct AccountCard: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Refresh quota for \(snapshot.label)")
+                Button(role: .destructive) {
+                    isConfirmingRemoval = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Remove \(snapshot.label)")
             }
 
             QuotaBar(label: "5h", window: quota?.session, tint: tint)
@@ -148,6 +156,12 @@ struct AccountCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(.separator.opacity(0.7), lineWidth: 1)
+        }
+        .confirmationDialog("Remove \(snapshot.label)?", isPresented: $isConfirmingRemoval) {
+            Button("Remove Account", role: .destructive) {
+                state.removeSnapshot(snapshot)
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 

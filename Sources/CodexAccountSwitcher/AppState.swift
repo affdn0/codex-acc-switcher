@@ -80,6 +80,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    func removeSnapshot(_ snapshot: AccountSnapshot) {
+        do {
+            try store.deleteSnapshot(snapshot)
+            snapshots.removeAll { $0.id == snapshot.id }
+            quotas[snapshot.id] = nil
+            showStatus("Removed \(snapshot.label).")
+        } catch {
+            showStatus(Redaction.redact(error.localizedDescription))
+        }
+    }
+
     func relaunchCodex() {
         let script = """
         tell application "Codex" to quit

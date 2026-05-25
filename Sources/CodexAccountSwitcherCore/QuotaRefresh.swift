@@ -20,6 +20,12 @@ public final class QuotaSnapshotStore {
     public func save(_ snapshot: QuotaSnapshot) throws {
         try files.atomicWrite(JSONCoding.encoder.encode(snapshot), to: cacheURL(snapshotID: snapshot.snapshotID))
     }
+
+    public func remove(snapshotID: UUID) throws {
+        let url = cacheURL(snapshotID: snapshotID)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
 }
 
 public actor QuotaRefresher {

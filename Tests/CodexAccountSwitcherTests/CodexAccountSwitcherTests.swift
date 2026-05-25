@@ -167,6 +167,19 @@ import Testing
     #expect(index.snapshots.map(\.id) == [new.id])
 }
 
+@Test func deleteSnapshotRemovesAuthAndQuotaCache() throws {
+    let temp = try temporaryDirectory()
+    let active = temp.appendingPathComponent("auth.json")
+    let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
+    let snapshot = try store.saveSnapshot(label: "A", authData: sampleAuth(access: "access", refresh: "refresh"))
+    let quotaStore = QuotaSnapshotStore(files: store.files)
+    try quotaStore.save(QuotaSnapshot(snapshotID: snapshot.id, usage: UsageResponse(planType: "pro", rateLimit: nil, credits: nil)))
+    try store.deleteSnapshot(snapshot)
+    #expect(try store.loadIndex().snapshots.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: store.authURL(for: snapshot).path))
+    #expect(!FileManager.default.fileExists(atPath: quotaStore.cacheURL(snapshotID: snapshot.id).path))
+}
+
 @Test func importedSnapshotUsesJwtEmailAsLabel() throws {
     let temp = try temporaryDirectory()
     let active = temp.appendingPathComponent("auth.json")

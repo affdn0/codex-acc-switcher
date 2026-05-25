@@ -1,6 +1,6 @@
 cask "codex-account-switcher" do
-  version "0.1.8"
-  sha256 "80e3e3e05503734b4fdc467d15f23e159795ed761055175dc145971b095e5f9e"
+  version "0.1.9"
+  sha256 "85f327e08ec039aaf27f12aa8922cd1d1f9a5531acc04b49a9d906c7c0770e41"
 
   url "https://github.com/affdn0/codex-acc-switcher/releases/download/v#{version}/Codex-Account-Switcher-#{version}.zip"
   name "Codex Account Switcher"

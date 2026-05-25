@@ -76,6 +76,14 @@ public final class SnapshotStore {
         try saveSnapshot(label: label, authData: Data(contentsOf: activeAuthURL))
     }
 
+    public func deleteSnapshot(_ snapshot: AccountSnapshot) throws {
+        var index = try loadIndex()
+        index.snapshots.removeAll { $0.id == snapshot.id }
+        try saveIndex(index)
+        try removeFileIfExists(authURL(for: snapshot))
+        try QuotaSnapshotStore(files: files).remove(snapshotID: snapshot.id)
+    }
+
     public func removeDuplicateSnapshots() throws {
         var index = try loadIndex()
         var seen: [(snapshot: AccountSnapshot, auth: ActiveAuth)] = []
@@ -104,6 +112,11 @@ public final class SnapshotStore {
             return identifier
         }
         return "Codex \(Date().formatted(date: .abbreviated, time: .shortened))"
+    }
+
+    private func removeFileIfExists(_ url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
     }
 
     private func isGeneratedLabel(_ label: String) -> Bool {
