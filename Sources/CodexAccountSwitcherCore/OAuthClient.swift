@@ -22,23 +22,28 @@ public final class OAuthClient {
     private let transport: HTTPTransport
     private let tokenURL = URL(string: "https://auth.openai.com/oauth/token")!
     private let usageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+    private let codexClientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 
     public init(transport: HTTPTransport = URLSessionTransport()) {
         self.transport = transport
     }
 
     public func refreshIfNeeded(auth: ActiveAuth, now: Date = Date()) async throws -> ActiveAuth {
-        if let lastRefresh = auth.lastRefresh, now.timeIntervalSince(lastRefresh) < 55 * 60 {
+        let eightDays: TimeInterval = 8 * 24 * 60 * 60
+        if let lastRefresh = auth.lastRefresh, now.timeIntervalSince(lastRefresh) <= eightDays {
             return auth
         }
 
         var request = URLRequest(url: tokenURL)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = formBody([
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "client_id": codexClientID,
             "grant_type": "refresh_token",
             "refresh_token": auth.tokens.refreshToken,
+            "scope": "openid profile email",
         ])
 
         let (data, response) = try await transport.data(for: request)
@@ -56,6 +61,7 @@ public final class OAuthClient {
     public func fetchUsage(credentials: OAuthCredentials) async throws -> UsageResponse {
         var request = URLRequest(url: usageURL)
         request.httpMethod = "GET"
+        request.timeoutInterval = 30
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let accountID = credentials.accountID {
@@ -66,16 +72,6 @@ public final class OAuthClient {
         return try JSONCoding.decoder.decode(UsageResponse.self, from: data)
     }
 
-    private func formBody(_ fields: [String: String]) -> Data {
-        fields
-            .map { key, value in "\(escape(key))=\(escape(value))" }
-            .joined(separator: "&")
-            .data(using: .utf8) ?? Data()
-    }
-
-    private func escape(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-    }
 }
 
 extension OAuthClient: @unchecked Sendable {}

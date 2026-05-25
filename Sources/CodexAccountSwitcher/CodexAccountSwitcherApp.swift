@@ -69,7 +69,13 @@ struct MenuContentView: View {
         if let plan = quota.planType { parts.append(plan) }
         if let session = quota.session { parts.append("5h \(percentText(session)) \(resetText(session))") }
         if let weekly = quota.weekly { parts.append("weekly \(percentText(weekly)) \(resetText(weekly))") }
-        if let credits = quota.credits?.remaining { parts.append("credits \(format(credits))") }
+        if let credits = quota.credits {
+            if credits.unlimited == true {
+                parts.append("credits unlimited")
+            } else if let remaining = credits.remaining ?? credits.balance {
+                parts.append("credits \(format(remaining))")
+            }
+        }
         parts.append("stale \(quota.fetchedAt.formatted(date: .omitted, time: .shortened))")
         if let error = quota.error { parts.append("error \(error)") }
         return parts.joined(separator: " | ")

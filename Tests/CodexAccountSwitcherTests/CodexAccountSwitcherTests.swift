@@ -16,17 +16,20 @@ import Testing
     {
       "plan_type": "pro",
       "rate_limit": {
-        "primary_window": { "used_percent": 20, "reset_at": "2026-05-25T10:00:00Z" },
+        "primary_window": { "used_percent": 20, "reset_at": 1779703200, "limit_window_seconds": 18000 },
         "secondary_window": { "remaining_percent": "55.5", "resets_in_seconds": 3600 }
       },
-      "credits": { "remaining": 12, "used": 3, "granted": 15 }
+      "credits": { "balance": "12", "has_credits": true, "unlimited": false }
     }
     """.data(using: .utf8)!
     let usage = try JSONCoding.decoder.decode(UsageResponse.self, from: data)
     #expect(usage.planType == "pro")
     #expect(usage.rateLimit?.primaryWindow?.usedPercent == 20)
+    #expect(usage.rateLimit?.primaryWindow?.resetAt == Date(timeIntervalSince1970: 1_779_703_200))
+    #expect(usage.rateLimit?.primaryWindow?.limitWindowSeconds == 18_000)
     #expect(usage.rateLimit?.secondaryWindow?.remainingPercent == 55.5)
-    #expect(usage.credits?.remaining == 12)
+    #expect(usage.credits?.balance == 12)
+    #expect(usage.credits?.hasCredits == true)
 }
 
 @Test func tokenRefreshUpdatesSnapshotWithStrictPermissions() async throws {
@@ -34,7 +37,13 @@ import Testing
     let active = temp.appendingPathComponent("auth.json")
     let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
     let snapshot = try store.saveSnapshot(label: "A", authData: sampleAuth(access: "old", refresh: "refresh"))
+    final class RequestBox: @unchecked Sendable {
+        var requests: [URLRequest] = []
+        func append(_ request: URLRequest) { requests.append(request) }
+    }
+    let box = RequestBox()
     let client = OAuthClient(transport: MockTransport { request in
+        box.append(request)
         if request.url!.absoluteString.contains("/oauth/token") {
             return (Data(#"{"access_token":"new","refresh_token":"next","id_token":"new-id","account_id":"acct"}"#.utf8), http(request.url!, 200))
         }
@@ -45,6 +54,38 @@ import Testing
     let auth = try store.loadAuth(for: snapshot)
     #expect(auth.tokens.accessToken == "new")
     #expect(try store.files.permissions(at: store.authURL(for: snapshot)) == 0o600)
+    let refreshRequest = try #require(box.requests.first { $0.url?.absoluteString.contains("/oauth/token") == true })
+    #expect(refreshRequest.value(forHTTPHeaderField: "Content-Type") == "application/json")
+    let body = try #require(refreshRequest.httpBody)
+    let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
+    #expect(json["client_id"] == "app_EMoamEEZ73f0CkXaXp7hrann")
+    #expect(json["grant_type"] == "refresh_token")
+    #expect(json["refresh_token"] == "refresh")
+    #expect(json["scope"] == "openid profile email")
+    let usageRequest = try #require(box.requests.first { $0.url?.absoluteString.contains("/wham/usage") == true })
+    #expect(usageRequest.value(forHTTPHeaderField: "Authorization") == "Bearer new")
+    #expect(usageRequest.value(forHTTPHeaderField: "Accept") == "application/json")
+    #expect(usageRequest.value(forHTTPHeaderField: "ChatGPT-Account-Id") == "acct")
+}
+
+@Test func freshCredentialsSkipRefreshAndFetchUsageDirectly() async throws {
+    let temp = try temporaryDirectory()
+    let active = temp.appendingPathComponent("auth.json")
+    let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
+    let snapshot = try store.saveSnapshot(label: "A", authData: sampleAuth(access: "fresh", refresh: "refresh", lastRefresh: Date()))
+    final class RequestBox: @unchecked Sendable {
+        var requests: [URLRequest] = []
+        func append(_ request: URLRequest) { requests.append(request) }
+    }
+    let box = RequestBox()
+    let client = OAuthClient(transport: MockTransport { request in
+        box.append(request)
+        return (Data(#"{"plan_type":"pro","rate_limit":{"primary_window":{"used_percent":2},"secondary_window":{"remaining_percent":98}}}"#.utf8), http(request.url!, 200))
+    })
+    let refresher = QuotaRefresher(snapshotStore: store, client: client)
+    _ = await refresher.refresh(snapshot: snapshot)
+    #expect(!box.requests.contains { $0.url?.absoluteString.contains("/oauth/token") == true })
+    #expect(box.requests.contains { $0.url?.absoluteString.contains("/wham/usage") == true })
 }
 
 @Test func snapshotAndCacheFilesUseStrictPermissions() throws {
@@ -75,8 +116,16 @@ import Testing
     #expect(try store.files.permissions(at: active) == 0o600)
 }
 
-private func sampleAuth(access: String, refresh: String) -> Data {
-    Data("""
+private func sampleAuth(access: String, refresh: String, lastRefresh: Date? = nil) -> Data {
+    let lastRefreshValue: String
+    if let lastRefresh {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        lastRefreshValue = formatter.string(from: lastRefresh)
+    } else {
+        lastRefreshValue = "2026-05-01T07:50:05.441616Z"
+    }
+    return Data("""
     {
       "auth_mode": "chatgpt",
       "OPENAI_API_KEY": null,
@@ -86,7 +135,7 @@ private func sampleAuth(access: String, refresh: String) -> Data {
         "id_token": "id",
         "account_id": "acct"
       },
-      "last_refresh": "2026-05-25T07:50:05.441616Z"
+      "last_refresh": "\(lastRefreshValue)"
     }
     """.utf8)
 }

@@ -35,6 +35,7 @@ public struct QuotaWindow: Codable, Equatable, Sendable {
     public var limit: Double?
     public var resetAt: Date?
     public var resetsInSeconds: Double?
+    public var limitWindowSeconds: Double?
 
     enum CodingKeys: String, CodingKey {
         case usedPercent = "used_percent"
@@ -43,6 +44,7 @@ public struct QuotaWindow: Codable, Equatable, Sendable {
         case limit
         case resetAt = "reset_at"
         case resetsInSeconds = "resets_in_seconds"
+        case limitWindowSeconds = "limit_window_seconds"
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,6 +55,7 @@ public struct QuotaWindow: Codable, Equatable, Sendable {
         limit = try c.decodeFlexibleDoubleIfPresent(forKey: .limit)
         resetsInSeconds = try c.decodeFlexibleDoubleIfPresent(forKey: .resetsInSeconds)
         resetAt = try c.decodeFlexibleDateIfPresent(forKey: .resetAt)
+        limitWindowSeconds = try c.decodeFlexibleDoubleIfPresent(forKey: .limitWindowSeconds)
     }
 }
 
@@ -60,11 +63,17 @@ public struct Credits: Codable, Equatable, Sendable {
     public var granted: Double?
     public var used: Double?
     public var remaining: Double?
+    public var balance: Double?
+    public var hasCredits: Bool?
+    public var unlimited: Bool?
 
     enum CodingKeys: String, CodingKey {
         case granted
         case used
         case remaining
+        case balance
+        case hasCredits = "has_credits"
+        case unlimited
     }
 
     public init(from decoder: Decoder) throws {
@@ -72,6 +81,9 @@ public struct Credits: Codable, Equatable, Sendable {
         granted = try c.decodeFlexibleDoubleIfPresent(forKey: .granted)
         used = try c.decodeFlexibleDoubleIfPresent(forKey: .used)
         remaining = try c.decodeFlexibleDoubleIfPresent(forKey: .remaining)
+        balance = try c.decodeFlexibleDoubleIfPresent(forKey: .balance)
+        hasCredits = try c.decodeIfPresent(Bool.self, forKey: .hasCredits)
+        unlimited = try c.decodeIfPresent(Bool.self, forKey: .unlimited)
     }
 }
 
@@ -111,6 +123,12 @@ extension KeyedDecodingContainer {
             let plain = ISO8601DateFormatter()
             plain.formatOptions = [.withInternetDateTime]
             return fractional.date(from: value) ?? plain.date(from: value)
+        }
+        if let seconds = try? decodeIfPresent(Double.self, forKey: key) {
+            return Date(timeIntervalSince1970: seconds)
+        }
+        if let seconds = try? decodeIfPresent(Int.self, forKey: key) {
+            return Date(timeIntervalSince1970: TimeInterval(seconds))
         }
         return nil
     }
