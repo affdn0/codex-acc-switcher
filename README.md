@@ -56,4 +56,12 @@ Use **Refresh Quotas** for a manual refresh. The app also refreshes after login/
 
 ## Sample Homebrew Cask
 
-`Packaging/Casks/codex-account-switcher.rb` is a sample cask for a future zipped app bundle. It intentionally uses placeholder URL and SHA values. This repo does not include a formula, release automation, signing, or notarization automation.
+Install from this repository as a Homebrew tap:
+
+```sh
+brew tap affdn0/codex-acc-switcher
+brew install --cask codex-account-switcher
+open "/Applications/Codex Account Switcher.app"
+```
+
+`Casks/codex-account-switcher.rb` is the tap cask Homebrew uses. `Packaging/Casks/codex-account-switcher.rb` is a copy kept with the packaging files for reference. This repo does not include a formula, release automation, signing, or notarization automation.
