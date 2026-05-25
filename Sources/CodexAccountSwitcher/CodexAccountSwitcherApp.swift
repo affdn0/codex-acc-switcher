@@ -6,19 +6,10 @@ struct CodexAccountSwitcherApp: App {
     @StateObject private var state = AppState()
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra("Codex Account Switcher", image: "MenuBarTemplate") {
             MenuContentView()
                 .environmentObject(state)
                 .onAppear { state.refreshStaleOnOpen() }
-        } label: {
-            BrandMark()
-                .contextMenu {
-                    Button {
-                        NSApplication.shared.terminate(nil)
-                    } label: {
-                        Label("Quit", systemImage: "power")
-                    }
-                }
         }
         .menuBarExtraStyle(.window)
     }
@@ -41,6 +32,33 @@ struct MenuContentView: View {
                 .buttonStyle(.borderless)
                 .help("Refresh all quotas")
                 .disabled(state.isRefreshing)
+
+                Divider()
+                    .frame(height: 18)
+
+                Button {
+                    state.addFromOAuthLogin()
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                }
+                .buttonStyle(.borderless)
+                .help("Add Account with OAuth Login")
+
+                Button {
+                    state.importCurrentActiveAuth()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .help("Import Current Active Auth")
+
+                Button {
+                    state.relaunchCodex()
+                } label: {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                }
+                .buttonStyle(.borderless)
+                .help("Relaunch Codex")
             }
 
             if state.snapshots.isEmpty {
@@ -51,31 +69,6 @@ struct MenuContentView: View {
                 ForEach(state.snapshots) { snapshot in
                     AccountCard(snapshot: snapshot, quota: state.quotas[snapshot.id])
                 }
-            }
-
-            Divider()
-
-            HStack(spacing: 10) {
-                Button {
-                    state.addFromOAuthLogin()
-                } label: {
-                    Image(systemName: "person.crop.circle.badge.plus")
-                }
-                .help("Add Account with OAuth Login")
-
-                Button {
-                    state.importCurrentActiveAuth()
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
-                }
-                .help("Import Current Active Auth")
-
-                Button {
-                    state.relaunchCodex()
-                } label: {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                }
-                .help("Relaunch Codex")
             }
 
             if let status = state.status {

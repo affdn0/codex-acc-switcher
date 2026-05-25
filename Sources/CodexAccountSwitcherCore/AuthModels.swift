@@ -14,7 +14,7 @@ public struct ActiveAuth: Codable, Equatable, Sendable {
     }
 
     public var snapshotIdentifier: String? {
-        if let email = tokens.claimString("email") {
+        if let email = tokens.normalizedEmail {
             return email
         }
         if let name = tokens.claimString("name") {
@@ -24,6 +24,16 @@ public struct ActiveAuth: Codable, Equatable, Sendable {
             return accountID
         }
         return nil
+    }
+
+    public func belongsToSameAccount(as other: ActiveAuth) -> Bool {
+        if let accountID = tokens.normalizedAccountID, let otherAccountID = other.tokens.normalizedAccountID {
+            return accountID == otherAccountID
+        }
+        if let email = tokens.normalizedEmail, let otherEmail = other.tokens.normalizedEmail {
+            return email == otherEmail
+        }
+        return false
     }
 }
 
@@ -49,6 +59,23 @@ public struct OAuthCredentials: Codable, Equatable, Sendable {
         return nil
     }
 
+    var normalizedAccountID: String? {
+        normalize(accountID)
+    }
+
+    var normalizedEmail: String? {
+        normalize(claimString("email"))
+    }
+
+    var accessTokenExpiresAt: Date? {
+        Self.jwtClaimDouble("exp", token: accessToken).map(Date.init(timeIntervalSince1970:))
+    }
+
+    private func normalize(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed?.isEmpty == false ? trimmed : nil
+    }
+
     private static func jwtClaimString(_ key: String, token: String) -> String? {
         let parts = token.split(separator: ".")
         guard parts.count >= 2 else { return nil }
@@ -68,6 +95,32 @@ public struct OAuthCredentials: Codable, Equatable, Sendable {
             return nil
         }
         return value
+    }
+
+    private static func jwtClaimDouble(_ key: String, token: String) -> Double? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padding = payload.count % 4
+        if padding > 0 {
+            payload += String(repeating: "=", count: 4 - padding)
+        }
+        guard
+            let data = Data(base64Encoded: payload),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let value = object[key]
+        else {
+            return nil
+        }
+        if let number = value as? NSNumber {
+            return number.doubleValue
+        }
+        if let string = value as? String {
+            return Double(string)
+        }
+        return nil
     }
 }
 

@@ -29,11 +29,21 @@ public final class OAuthClient {
     }
 
     public func refreshIfNeeded(auth: ActiveAuth, now: Date = Date()) async throws -> ActiveAuth {
-        let eightDays: TimeInterval = 8 * 24 * 60 * 60
-        if let lastRefresh = auth.lastRefresh, now.timeIntervalSince(lastRefresh) <= eightDays {
+        let fallbackRefreshInterval: TimeInterval = 50 * 60
+        let expiryGrace: TimeInterval = 5 * 60
+        if let expiresAt = auth.tokens.accessTokenExpiresAt, expiresAt.timeIntervalSince(now) > expiryGrace {
+            return auth
+        }
+        if auth.tokens.accessTokenExpiresAt == nil,
+           let lastRefresh = auth.lastRefresh,
+           now.timeIntervalSince(lastRefresh) <= fallbackRefreshInterval {
             return auth
         }
 
+        return try await refresh(auth: auth, now: now)
+    }
+
+    public func refresh(auth: ActiveAuth, now: Date = Date()) async throws -> ActiveAuth {
         var request = URLRequest(url: tokenURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 30

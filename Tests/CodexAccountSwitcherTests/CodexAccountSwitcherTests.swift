@@ -41,7 +41,7 @@ import Testing
     let temp = try temporaryDirectory()
     let active = temp.appendingPathComponent("auth.json")
     let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
-    let snapshot = try store.saveSnapshot(label: "A", authData: sampleAuth(access: "old", refresh: "refresh"))
+    let snapshot = try store.saveSnapshot(label: "A", authData: sampleAuth(access: "old", refresh: "refresh", lastRefresh: Date(timeIntervalSince1970: 0)))
     final class RequestBox: @unchecked Sendable {
         var requests: [URLRequest] = []
         func append(_ request: URLRequest) { requests.append(request) }
@@ -71,6 +71,35 @@ import Testing
     #expect(usageRequest.value(forHTTPHeaderField: "Authorization") == "Bearer new")
     #expect(usageRequest.value(forHTTPHeaderField: "Accept") == "application/json")
     #expect(usageRequest.value(forHTTPHeaderField: "ChatGPT-Account-Id") == "acct")
+}
+
+@Test func quotaRefreshForcesTokenRefreshAfterUnauthorizedUsage() async throws {
+    let temp = try temporaryDirectory()
+    let active = temp.appendingPathComponent("auth.json")
+    let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
+    let snapshot = try store.saveSnapshot(label: "A", authData: sampleAuth(access: "expired", refresh: "refresh", lastRefresh: Date()))
+    final class RequestBox: @unchecked Sendable {
+        var requests: [URLRequest] = []
+        func append(_ request: URLRequest) { requests.append(request) }
+    }
+    let box = RequestBox()
+    let client = OAuthClient(transport: MockTransport { request in
+        box.append(request)
+        if request.url!.absoluteString.contains("/oauth/token") {
+            return (Data(#"{"access_token":"new","refresh_token":"next","id_token":"new-id","account_id":"acct"}"#.utf8), http(request.url!, 200))
+        }
+        if request.value(forHTTPHeaderField: "Authorization") == "Bearer expired" {
+            return (Data(#"{"error":"expired"}"#.utf8), http(request.url!, 401))
+        }
+        return (Data(#"{"plan_type":"pro","rate_limit":{"primary_window":{"used_percent":3},"secondary_window":{"remaining_percent":97}}}"#.utf8), http(request.url!, 200))
+    })
+    let refresher = QuotaRefresher(snapshotStore: store, client: client)
+    let quota = await refresher.refresh(snapshot: snapshot)
+    let auth = try store.loadAuth(for: snapshot)
+    #expect(auth.tokens.accessToken == "new")
+    #expect(quota.error == nil)
+    #expect(box.requests.filter { $0.url?.absoluteString.contains("/wham/usage") == true }.count == 2)
+    #expect(box.requests.filter { $0.url?.absoluteString.contains("/oauth/token") == true }.count == 1)
 }
 
 @Test func freshCredentialsSkipRefreshAndFetchUsageDirectly() async throws {
@@ -107,6 +136,35 @@ import Testing
     #expect(!cache.contains("access"))
     #expect(!cache.contains("refresh"))
     #expect(!cache.contains("Bearer"))
+}
+
+@Test func savingSameAccountUpdatesExistingSnapshot() throws {
+    let temp = try temporaryDirectory()
+    let active = temp.appendingPathComponent("auth.json")
+    let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
+    let first = try store.saveSnapshot(label: "Custom", authData: sampleAuth(access: "old", refresh: "refresh", email: "codex@example.com"))
+    let second = try store.saveSnapshot(authData: sampleAuth(access: "new", refresh: "next", email: "CODEX@example.com"))
+    let index = try store.loadIndex()
+    let auth = try store.loadAuth(for: second)
+    #expect(first.id == second.id)
+    #expect(index.snapshots.count == 1)
+    #expect(index.snapshots[0].label == "Custom")
+    #expect(auth.tokens.accessToken == "new")
+    #expect(auth.tokens.refreshToken == "next")
+}
+
+@Test func duplicateSnapshotsAreRemovedByAccountIdentity() throws {
+    let temp = try temporaryDirectory()
+    let active = temp.appendingPathComponent("auth.json")
+    let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
+    let old = AccountSnapshot(label: "Old", createdAt: Date(timeIntervalSince1970: 1), updatedAt: Date(timeIntervalSince1970: 1))
+    let new = AccountSnapshot(label: "New", createdAt: Date(timeIntervalSince1970: 2), updatedAt: Date(timeIntervalSince1970: 2))
+    try store.files.atomicWrite(sampleAuth(access: "old", refresh: "refresh", email: "codex@example.com"), to: store.authURL(for: old))
+    try store.files.atomicWrite(sampleAuth(access: "new", refresh: "next", email: "codex@example.com"), to: store.authURL(for: new))
+    try store.saveIndex(SnapshotIndex(snapshots: [old, new]))
+    try store.removeDuplicateSnapshots()
+    let index = try store.loadIndex()
+    #expect(index.snapshots.map(\.id) == [new.id])
 }
 
 @Test func importedSnapshotUsesJwtEmailAsLabel() throws {

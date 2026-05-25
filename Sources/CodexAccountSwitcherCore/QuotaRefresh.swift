@@ -41,11 +41,17 @@ public actor QuotaRefresher {
     public func refresh(snapshot: AccountSnapshot) async -> QuotaSnapshot {
         do {
             let original = try snapshotStore.loadAuth(for: snapshot)
-            let refreshed = try await client.refreshIfNeeded(auth: original)
-            if refreshed != original {
-                try snapshotStore.updateSnapshotAuth(snapshot, auth: refreshed)
+            var refreshed = try await client.refreshIfNeeded(auth: original)
+            try updateSnapshotIfNeeded(snapshot, original: original, refreshed: refreshed)
+            let usage: UsageResponse
+            do {
+                usage = try await client.fetchUsage(credentials: refreshed.tokens)
+            } catch OAuthError.httpStatus(401) {
+                let stale = refreshed
+                refreshed = try await client.refresh(auth: refreshed)
+                try updateSnapshotIfNeeded(snapshot, original: stale, refreshed: refreshed)
+                usage = try await client.fetchUsage(credentials: refreshed.tokens)
             }
-            let usage = try await client.fetchUsage(credentials: refreshed.tokens)
             let quota = QuotaSnapshot(snapshotID: snapshot.id, usage: usage)
             try quotaStore.save(quota)
             return quota
@@ -59,6 +65,12 @@ public actor QuotaRefresher {
             let failed = QuotaSnapshot(snapshotID: snapshot.id, usage: UsageResponse(planType: nil, rateLimit: nil, credits: nil), error: message)
             try? quotaStore.save(failed)
             return failed
+        }
+    }
+
+    private func updateSnapshotIfNeeded(_ snapshot: AccountSnapshot, original: ActiveAuth, refreshed: ActiveAuth) throws {
+        if refreshed != original {
+            try snapshotStore.updateSnapshotAuth(snapshot, auth: refreshed)
         }
     }
 }

@@ -17,6 +17,7 @@ cp ".build/$CONFIG/CodexAccountSwitcher" "$MACOS/Codex Account Switcher"
 cp "$ROOT/Packaging/Info.plist" "$CONTENTS/Info.plist"
 cp "$ROOT/Packaging/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 cp "$ROOT/Packaging/MenuBarTemplate.png" "$RESOURCES/MenuBarTemplate.png"
+cp "$ROOT/Packaging/MenuBarTemplate@2x.png" "$RESOURCES/MenuBarTemplate@2x.png"
 chmod 755 "$MACOS/Codex Account Switcher"
 codesign --force --deep --sign - "$APP"
 

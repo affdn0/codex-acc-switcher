@@ -27,6 +27,7 @@ final class AppState: ObservableObject {
 
     func reload() {
         do {
+            try store.removeDuplicateSnapshots()
             snapshots = try store.loadIndex().snapshots.sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
             Task { await loadCachedQuotas() }
         } catch {
@@ -37,15 +38,22 @@ final class AppState: ObservableObject {
     func addFromOAuthLogin() {
         showStatus("Starting codex login...")
         Task {
+            let previous = try? store.importActiveAuth()
             do {
                 try loginRunner.runLogin()
                 let snapshot = try store.importActiveAuth()
+                if let previous, previous.id != snapshot.id {
+                    try store.switchActiveAuth(to: previous)
+                }
                 await MainActor.run {
                     showStatus("Saved \(snapshot.label).")
                     reload()
                 }
                 await refresh(snapshot: snapshot)
             } catch {
+                if let previous {
+                    try? store.switchActiveAuth(to: previous)
+                }
                 await MainActor.run { showStatus(Redaction.redact(error.localizedDescription)) }
             }
         }
