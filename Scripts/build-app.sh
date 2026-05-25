@@ -16,5 +16,6 @@ mkdir -p "$MACOS" "$RESOURCES"
 cp ".build/$CONFIG/CodexAccountSwitcher" "$MACOS/Codex Account Switcher"
 cp "$ROOT/Packaging/Info.plist" "$CONTENTS/Info.plist"
 chmod 755 "$MACOS/Codex Account Switcher"
+codesign --force --deep --sign - "$APP"
 
 echo "$APP"

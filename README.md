@@ -11,6 +11,7 @@ open ".build/Codex Account Switcher.app"
 ```
 
 The build script creates a local `.app` bundle at `.build/Codex Account Switcher.app`. It does not sign, notarize, release, or publish anything.
+It does apply an ad-hoc local code signature so macOS recognizes the hand-built app bundle structure.
 
 ## Account Snapshots
 
@@ -65,3 +66,4 @@ open "/Applications/Codex Account Switcher.app"
 ```
 
 `Casks/codex-account-switcher.rb` is the tap cask Homebrew uses. `Packaging/Casks/codex-account-switcher.rb` is a copy kept with the packaging files for reference. This repo does not include a formula, release automation, signing, or notarization automation.
+Because the app is intentionally not notarized, the personal cask removes the quarantine attribute after install for local testing.

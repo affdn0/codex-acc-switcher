@@ -1,6 +1,6 @@
 cask "codex-account-switcher" do
-  version "0.1.0"
-  sha256 "f537b002161dd6ca56f9203d06bc38a7a48dcc3a9abf8eadfcd43eda7632bbad"
+  version "0.1.1"
+  sha256 "05fbe75102324d9d4558fb5a8a7f817af92690bfb137b21efbf9bdc1b353d5cc"
 
   url "https://github.com/affdn0/codex-acc-switcher/releases/download/v#{version}/Codex-Account-Switcher-#{version}.zip"
   name "Codex Account Switcher"
@@ -8,4 +8,9 @@ cask "codex-account-switcher" do
   homepage "https://github.com/affdn0/codex-acc-switcher"
 
   app "Codex Account Switcher.app"
+
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Codex Account Switcher.app"]
+  end
 end
