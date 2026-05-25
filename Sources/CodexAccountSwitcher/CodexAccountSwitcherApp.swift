@@ -12,6 +12,13 @@ struct CodexAccountSwitcherApp: App {
                 .onAppear { state.refreshStaleOnOpen() }
         } label: {
             BrandMark()
+                .contextMenu {
+                    Button {
+                        NSApplication.shared.terminate(nil)
+                    } label: {
+                        Label("Quit", systemImage: "power")
+                    }
+                }
         }
         .menuBarExtraStyle(.window)
     }
@@ -78,16 +85,6 @@ struct MenuContentView: View {
                     .lineLimit(2)
             }
 
-            Divider()
-            HStack {
-                Spacer()
-                Button {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Image(systemName: "power")
-                }
-                .help("Quit")
-            }
         }
         .padding(14)
         .frame(width: 380)
