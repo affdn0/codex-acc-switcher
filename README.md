@@ -59,7 +59,7 @@ Use **Refresh Quotas** for a manual refresh. The app also refreshes after login/
 Install from this repository as a Homebrew tap:
 
 ```sh
-brew tap affdn0/codex-acc-switcher
+brew tap affdn0/codex-acc-switcher https://github.com/affdn0/codex-acc-switcher
 brew install --cask codex-account-switcher
 open "/Applications/Codex Account Switcher.app"
 ```
