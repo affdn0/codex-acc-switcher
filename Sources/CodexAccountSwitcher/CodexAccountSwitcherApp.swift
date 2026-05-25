@@ -6,12 +6,14 @@ struct CodexAccountSwitcherApp: App {
     @StateObject private var state = AppState()
 
     var body: some Scene {
-        MenuBarExtra("Codex", systemImage: "person.2.crop.square.stack") {
+        MenuBarExtra {
             MenuContentView()
                 .environmentObject(state)
                 .onAppear { state.refreshStaleOnOpen() }
+        } label: {
+            BrandMark()
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
     }
 }
 
@@ -19,82 +21,223 @@ struct MenuContentView: View {
     @EnvironmentObject private var state: AppState
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Codex Account Switcher")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    state.refreshAll()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh all quotas")
+                .disabled(state.isRefreshing)
+            }
+
             if state.snapshots.isEmpty {
                 Text("No Account Snapshots")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 96)
             } else {
                 ForEach(state.snapshots) { snapshot in
-                    Button {
-                        state.switchTo(snapshot)
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(snapshot.label)
-                            Text(quotaLine(state.quotas[snapshot.id]))
-                        }
-                    }
+                    AccountCard(snapshot: snapshot, quota: state.quotas[snapshot.id])
                 }
             }
 
             Divider()
 
-            Button("Add Account with OAuth Login") {
-                state.addFromOAuthLogin()
-            }
-            Button("Import Current Active Auth") {
-                state.importCurrentActiveAuth()
-            }
-            Button(state.isRefreshing ? "Refreshing Quotas..." : "Refresh Quotas") {
-                state.refreshAll()
-            }
-            .disabled(state.isRefreshing)
-            Button("Relaunch Codex") {
-                state.relaunchCodex()
+            HStack(spacing: 10) {
+                Button("Add Account") {
+                    state.addFromOAuthLogin()
+                }
+                Button("Import Active") {
+                    state.importCurrentActiveAuth()
+                }
+                Button("Relaunch Codex") {
+                    state.relaunchCodex()
+                }
             }
 
             if let status = state.status {
-                Divider()
                 Text(status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
 
             Divider()
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
+            HStack {
+                Spacer()
+                Button("Quit") {
+                    NSApplication.shared.terminate(nil)
+                }
             }
+        }
+        .padding(14)
+        .frame(width: 380)
+    }
+}
+
+struct AccountCard: View {
+    @EnvironmentObject private var state: AppState
+    let snapshot: AccountSnapshot
+    let quota: QuotaSnapshot?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(snapshot.label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    Text(planText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(staleText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Button {
+                    state.refreshOne(snapshot)
+                } label: {
+                    Image(systemName: "arrow.clockwise.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh quota for \(snapshot.label)")
+            }
+
+            QuotaBar(label: "5h", window: quota?.session, tint: tint)
+            QuotaBar(label: "weekly", window: quota?.weekly, tint: tint)
+
+            HStack {
+                Text(resetLine)
+                Spacer()
+                Text(creditsLine)
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            if let error = quota?.error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+            }
+
+            HStack {
+                Spacer()
+                Button("Switch") {
+                    state.switchTo(snapshot)
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(10)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(.separator.opacity(0.7), lineWidth: 1)
         }
     }
 
-    private func quotaLine(_ quota: QuotaSnapshot?) -> String {
-        guard let quota else { return "Quota not fetched" }
-        var parts: [String] = []
-        if let plan = quota.planType { parts.append(plan) }
-        if let session = quota.session { parts.append("5h \(percentText(session)) \(resetText(session))") }
-        if let weekly = quota.weekly { parts.append("weekly \(percentText(weekly)) \(resetText(weekly))") }
-        if let credits = quota.credits {
-            if credits.unlimited == true {
-                parts.append("credits unlimited")
-            } else if let remaining = credits.remaining ?? credits.balance {
-                parts.append("credits \(format(remaining))")
-            }
-        }
-        parts.append("stale \(quota.fetchedAt.formatted(date: .omitted, time: .shortened))")
-        if let error = quota.error { parts.append("error \(error)") }
-        return parts.joined(separator: " | ")
+    private var planText: String {
+        quota?.planType ?? "quota not fetched"
     }
 
-    private func percentText(_ window: QuotaWindow) -> String {
+    private var staleText: String {
+        guard let fetchedAt = quota?.fetchedAt else { return "not synced" }
+        return "synced \(fetchedAt.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private var resetLine: String {
+        [quota?.session, quota?.weekly]
+            .compactMap(resetText)
+            .first ?? "reset unknown"
+    }
+
+    private var creditsLine: String {
+        guard let credits = quota?.credits else { return "credits unknown" }
+        if credits.unlimited == true { return "credits unlimited" }
+        if let remaining = credits.remaining ?? credits.balance {
+            return "credits \(format(remaining))"
+        }
+        return "credits unknown"
+    }
+
+    private var tint: Color {
+        let maxUsed = max(quota?.session?.usedFraction ?? 0, quota?.weekly?.usedFraction ?? 0)
+        if maxUsed >= 0.9 { return .red }
+        if maxUsed >= 0.7 { return .orange }
+        return .accentColor
+    }
+
+    private func resetText(_ window: QuotaWindow?) -> String? {
+        guard let window else { return nil }
+        if let resetAt = window.resetAt {
+            return "\(windowName(window)) resets \(resetAt.formatted(date: .omitted, time: .shortened))"
+        }
+        if let seconds = window.resetsInSeconds {
+            return "\(windowName(window)) resets in \(Int(seconds / 60))m"
+        }
+        return nil
+    }
+
+    private func windowName(_ window: QuotaWindow) -> String {
+        window.limitWindowSeconds == 18_000 ? "5h" : "weekly"
+    }
+
+    private func format(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...1)))
+    }
+}
+
+struct QuotaBar: View {
+    let label: String
+    let window: QuotaWindow?
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.caption)
+                .frame(width: 44, alignment: .leading)
+            ProgressView(value: window?.usedFraction ?? 0)
+                .tint(tint)
+            Text(percentText)
+                .font(.caption)
+                .monospacedDigit()
+                .frame(width: 72, alignment: .trailing)
+        }
+    }
+
+    private var percentText: String {
+        guard let window else { return "--" }
         if let remaining = window.remainingPercent { return "\(format(remaining))% left" }
         if let used = window.usedPercent { return "\(format(used))% used" }
         if let used = window.used, let limit = window.limit, limit > 0 { return "\(format(used / limit * 100))% used" }
         return "unknown"
     }
 
-    private func resetText(_ window: QuotaWindow) -> String {
-        if let resetAt = window.resetAt { return "resets \(resetAt.formatted(date: .omitted, time: .shortened))" }
-        if let seconds = window.resetsInSeconds { return "resets in \(Int(seconds / 60))m" }
-        return ""
-    }
-
     private func format(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...1)))
+    }
+}
+
+private extension QuotaWindow {
+    var usedFraction: Double {
+        if let usedPercent {
+            return min(max(usedPercent / 100, 0), 1)
+        }
+        if let remainingPercent {
+            return min(max((100 - remainingPercent) / 100, 0), 1)
+        }
+        if let used, let limit, limit > 0 {
+            return min(max(used / limit, 0), 1)
+        }
+        return 0
     }
 }

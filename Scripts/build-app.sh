@@ -15,6 +15,7 @@ rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES"
 cp ".build/$CONFIG/CodexAccountSwitcher" "$MACOS/Codex Account Switcher"
 cp "$ROOT/Packaging/Info.plist" "$CONTENTS/Info.plist"
+cp "$ROOT/Packaging/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 chmod 755 "$MACOS/Codex Account Switcher"
 codesign --force --deep --sign - "$APP"
 

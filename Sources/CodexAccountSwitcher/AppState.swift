@@ -98,6 +98,10 @@ final class AppState: ObservableObject {
         }
     }
 
+    func refreshOne(_ snapshot: AccountSnapshot) {
+        Task { await refresh(snapshot: snapshot) }
+    }
+
     func refreshStaleOnOpen() {
         let staleAfter: TimeInterval = 15 * 60
         for snapshot in snapshots where Date().timeIntervalSince(quotas[snapshot.id]?.fetchedAt ?? .distantPast) > staleAfter {
