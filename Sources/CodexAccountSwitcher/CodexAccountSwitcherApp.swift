@@ -49,15 +49,26 @@ struct MenuContentView: View {
             Divider()
 
             HStack(spacing: 10) {
-                Button("Add Account") {
+                Button {
                     state.addFromOAuthLogin()
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
                 }
-                Button("Import Active") {
+                .help("Add Account with OAuth Login")
+
+                Button {
                     state.importCurrentActiveAuth()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
                 }
-                Button("Relaunch Codex") {
+                .help("Import Current Active Auth")
+
+                Button {
                     state.relaunchCodex()
+                } label: {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                 }
+                .help("Relaunch Codex")
             }
 
             if let status = state.status {
@@ -70,9 +81,12 @@ struct MenuContentView: View {
             Divider()
             HStack {
                 Spacer()
-                Button("Quit") {
+                Button {
                     NSApplication.shared.terminate(nil)
+                } label: {
+                    Image(systemName: "power")
                 }
+                .help("Quit")
             }
         }
         .padding(14)
@@ -129,10 +143,13 @@ struct AccountCard: View {
 
             HStack {
                 Spacer()
-                Button("Switch") {
+                Button {
                     state.switchTo(snapshot)
+                } label: {
+                    Image(systemName: "arrow.right.circle")
                 }
                 .controlSize(.small)
+                .help("Switch Active Auth to \(snapshot.label)")
             }
         }
         .padding(10)

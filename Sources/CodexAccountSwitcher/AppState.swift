@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     @Published var status: String?
     @Published var isRefreshing = false
 
+    private var statusClearTask: Task<Void, Never>?
     private let store: SnapshotStore
     private let refresher: QuotaRefresher
     private let loginRunner = CodexLoginRunner()
@@ -29,23 +30,23 @@ final class AppState: ObservableObject {
             snapshots = try store.loadIndex().snapshots.sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
             Task { await loadCachedQuotas() }
         } catch {
-            status = Redaction.redact(error.localizedDescription)
+            showStatus(Redaction.redact(error.localizedDescription))
         }
     }
 
     func addFromOAuthLogin() {
-        status = "Starting codex login..."
+        showStatus("Starting codex login...")
         Task {
             do {
                 try loginRunner.runLogin()
                 let snapshot = try store.importActiveAuth()
                 await MainActor.run {
-                    status = "Saved \(snapshot.label)."
+                    showStatus("Saved \(snapshot.label).")
                     reload()
                 }
                 await refresh(snapshot: snapshot)
             } catch {
-                await MainActor.run { status = Redaction.redact(error.localizedDescription) }
+                await MainActor.run { showStatus(Redaction.redact(error.localizedDescription)) }
             }
         }
     }
@@ -53,21 +54,21 @@ final class AppState: ObservableObject {
     func importCurrentActiveAuth() {
         do {
             let snapshot = try store.importActiveAuth()
-            status = "Saved \(snapshot.label)."
+            showStatus("Saved \(snapshot.label).")
             reload()
             Task { await refresh(snapshot: snapshot) }
         } catch {
-            status = Redaction.redact(error.localizedDescription)
+            showStatus(Redaction.redact(error.localizedDescription))
         }
     }
 
     func switchTo(_ snapshot: AccountSnapshot) {
         do {
             try store.switchActiveAuth(to: snapshot)
-            status = "Switched Active Auth to \(snapshot.label). Relaunch Codex when ready."
+            showStatus("Switched Active Auth to \(snapshot.label). Relaunch Codex when ready.")
             Task { await refresh(snapshot: snapshot) }
         } catch {
-            status = Redaction.redact(error.localizedDescription)
+            showStatus(Redaction.redact(error.localizedDescription))
         }
     }
 
@@ -82,9 +83,9 @@ final class AppState: ObservableObject {
         process.arguments = ["-e", script]
         do {
             try process.run()
-            status = "Relaunch Codex requested."
+            showStatus("Relaunch Codex requested.")
         } catch {
-            status = "Could not relaunch Codex: \(Redaction.redact(error.localizedDescription))"
+            showStatus("Could not relaunch Codex: \(Redaction.redact(error.localizedDescription))")
         }
     }
 
@@ -120,5 +121,18 @@ final class AppState: ObservableObject {
             cached[snapshot.id] = await refresher.cachedQuota(for: snapshot)
         }
         await MainActor.run { quotas = cached }
+    }
+
+    private func showStatus(_ message: String, clearAfter seconds: UInt64 = 4) {
+        status = message
+        statusClearTask?.cancel()
+        statusClearTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard self?.status == message else { return }
+                self?.status = nil
+            }
+        }
     }
 }
