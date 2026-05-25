@@ -11,6 +11,11 @@ import Testing
     #expect(auth.lastRefresh != nil)
 }
 
+@Test func derivesSnapshotIdentifierFromJwtEmail() throws {
+    let auth = try JSONCoding.decoder.decode(ActiveAuth.self, from: sampleAuth(access: "access", refresh: "refresh", email: "you@example.com"))
+    #expect(auth.snapshotIdentifier == "you@example.com")
+}
+
 @Test func decodesUsageResponseWindowsAndCredits() throws {
     let data = """
     {
@@ -104,6 +109,15 @@ import Testing
     #expect(!cache.contains("Bearer"))
 }
 
+@Test func importedSnapshotUsesJwtEmailAsLabel() throws {
+    let temp = try temporaryDirectory()
+    let active = temp.appendingPathComponent("auth.json")
+    try sampleAuth(access: "access", refresh: "refresh", email: "codex@example.com").write(to: active)
+    let store = SnapshotStore(appSupportURL: temp.appendingPathComponent("support"), activeAuthURL: active)
+    let snapshot = try store.importActiveAuth()
+    #expect(snapshot.label == "codex@example.com")
+}
+
 @Test func switchActiveAuthAtomicallyReplacesGlobalAuth() throws {
     let temp = try temporaryDirectory()
     let active = temp.appendingPathComponent("auth.json")
@@ -116,7 +130,7 @@ import Testing
     #expect(try store.files.permissions(at: active) == 0o600)
 }
 
-private func sampleAuth(access: String, refresh: String, lastRefresh: Date? = nil) -> Data {
+private func sampleAuth(access: String, refresh: String, lastRefresh: Date? = nil, email: String? = nil) -> Data {
     let lastRefreshValue: String
     if let lastRefresh {
         let formatter = ISO8601DateFormatter()
@@ -125,6 +139,7 @@ private func sampleAuth(access: String, refresh: String, lastRefresh: Date? = ni
     } else {
         lastRefreshValue = "2026-05-01T07:50:05.441616Z"
     }
+    let idToken = email.map(makeJWT(email:)) ?? "id"
     return Data("""
     {
       "auth_mode": "chatgpt",
@@ -132,12 +147,27 @@ private func sampleAuth(access: String, refresh: String, lastRefresh: Date? = ni
       "tokens": {
         "access_token": "\(access)",
         "refresh_token": "\(refresh)",
-        "id_token": "id",
+        "id_token": "\(idToken)",
         "account_id": "acct"
       },
       "last_refresh": "\(lastRefreshValue)"
     }
     """.utf8)
+}
+
+private func makeJWT(email: String) -> String {
+    let header = #"{"alg":"none"}"#.data(using: .utf8)!.base64URLEncodedString()
+    let payload = #"{"email":"\#(email)","name":"Codex User"}"#.data(using: .utf8)!.base64URLEncodedString()
+    return "\(header).\(payload)."
+}
+
+private extension Data {
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
 }
 
 private func temporaryDirectory() throws -> URL {

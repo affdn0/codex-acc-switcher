@@ -24,13 +24,13 @@ public final class SnapshotStore {
         files.snapshotsDirectory.appendingPathComponent(snapshot.authFileName)
     }
 
-    public func saveSnapshot(label: String, authData: Data) throws -> AccountSnapshot {
+    public func saveSnapshot(label: String? = nil, authData: Data) throws -> AccountSnapshot {
         let auth = try JSONCoding.decoder.decode(ActiveAuth.self, from: authData)
         guard !auth.tokens.accessToken.isEmpty, !auth.tokens.refreshToken.isEmpty else {
             throw SnapshotStoreError.missingOAuthCredentials
         }
         var index = try loadIndex()
-        let snapshot = AccountSnapshot(label: label)
+        let snapshot = AccountSnapshot(label: label ?? suggestedLabel(for: auth))
         try files.atomicWrite(authData, to: authURL(for: snapshot))
         index.snapshots.append(snapshot)
         try saveIndex(index)
@@ -56,8 +56,15 @@ public final class SnapshotStore {
         try files.atomicWrite(data, to: activeAuthURL)
     }
 
-    public func importActiveAuth(label: String) throws -> AccountSnapshot {
+    public func importActiveAuth(label: String? = nil) throws -> AccountSnapshot {
         try saveSnapshot(label: label, authData: Data(contentsOf: activeAuthURL))
+    }
+
+    private func suggestedLabel(for auth: ActiveAuth) -> String {
+        if let identifier = auth.snapshotIdentifier {
+            return identifier
+        }
+        return "Codex \(Date().formatted(date: .abbreviated, time: .shortened))"
     }
 }
 

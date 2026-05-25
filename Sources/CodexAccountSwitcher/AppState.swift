@@ -38,8 +38,7 @@ final class AppState: ObservableObject {
         Task {
             do {
                 try loginRunner.runLogin()
-                let label = "Codex \(Date().formatted(date: .abbreviated, time: .shortened))"
-                let snapshot = try store.importActiveAuth(label: label)
+                let snapshot = try store.importActiveAuth()
                 await MainActor.run {
                     status = "Saved \(snapshot.label)."
                     reload()
@@ -53,8 +52,7 @@ final class AppState: ObservableObject {
 
     func importCurrentActiveAuth() {
         do {
-            let label = "Imported \(Date().formatted(date: .abbreviated, time: .shortened))"
-            let snapshot = try store.importActiveAuth(label: label)
+            let snapshot = try store.importActiveAuth()
             status = "Saved \(snapshot.label)."
             reload()
             Task { await refresh(snapshot: snapshot) }
